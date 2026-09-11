@@ -1,7 +1,8 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const root = new URL('../..', import.meta.url).pathname;
+const root = fileURLToPath(new URL('../..', import.meta.url));
 const jsonFiles = ['package.json', 'schemas/workday-aware.schema.json'];
 for (const file of jsonFiles) {
   const content = readFileSync(join(root, file), 'utf8');

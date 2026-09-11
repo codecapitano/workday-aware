@@ -2,8 +2,9 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
-const root = new URL('../..', import.meta.url).pathname;
+const root = fileURLToPath(new URL('../..', import.meta.url));
 const read = (file) => readFileSync(join(root, file), 'utf8');
 
 test('skill frontmatter and OpenAI metadata are complete', () => {

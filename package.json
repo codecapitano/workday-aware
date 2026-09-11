@@ -1,0 +1,16 @@
+{
+  "name": "workday-aware",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Workday-aware task assessment for coding agents.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test test/adapters/adapters.test.mjs test/core/cli.test.mjs test/core/config.test.mjs test/core/core.test.mjs test/installer/setup.test.mjs && npm run test:meta",
+    "test:meta": "node --test test/meta/package.test.mjs",
+    "lint": "node --check adapters/index.mjs && node --check skills/workday-aware/scripts/adapters.mjs && node --check skills/workday-aware/scripts/core.mjs && node --check skills/workday-aware/scripts/setup.mjs && node --check skills/workday-aware/scripts/workday-aware.mjs && node --check test/adapters/adapters.test.mjs && node --check test/core/cli.test.mjs && node --check test/core/config.test.mjs && node --check test/core/core.test.mjs && node --check test/installer/setup.test.mjs && node --check test/meta/package.test.mjs",
+    "format-check": "node test/meta/format-check.mjs"
+  }
+}

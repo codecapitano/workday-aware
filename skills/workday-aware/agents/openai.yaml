@@ -1,0 +1,6 @@
+interface:
+  display_name: Workday-aware
+  short_description: Assess meaningful work against the workday
+  default_prompt: Assess this task against my configured workday before starting meaningful work.
+policy:
+  allow_implicit_invocation: true

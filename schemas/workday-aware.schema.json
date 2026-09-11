@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "workday-aware configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "timezone": {
+      "type": "string",
+      "minLength": 1,
+      "$comment": "Validated at runtime by Node.js Intl against the runtime's IANA timezone data."
+    },
+    "workDays": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ]
+      }
+    },
+    "endOfDay": {
+      "type": "string",
+      "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$",
+      "not": {
+        "const": "00:00"
+      }
+    },
+    "wrapUpMinutes": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1438,
+      "$comment": "Runtime also requires this value to be earlier than endOfDay."
+    },
+    "meaningfulWorkMinutes": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1440
+    },
+    "trustedProjects": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(?:/|[A-Za-z]:[\\\\/]|\\\\\\\\[^\\\\/]+[\\\\/][^\\\\/]+)"
+      }
+    }
+  }
+}

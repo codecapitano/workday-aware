@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import test, { afterEach, beforeEach } from 'node:test';
-import { adapters, adapterStatus, installAdapters, preflightAdapters } from '../../adapters/index.mjs';
+import { adapters, adapterStatus, installAdapters as installAdapterConfiguration, preflightAdapters as preflightAdapterConfiguration } from '../../adapters/index.mjs';
 import { atomicRemove, dataDir, statePath, uninstallAdapter } from '../../skills/workday-aware/scripts/setup.mjs';
 
 const nativeWrapperExtension = process.platform === 'win32' ? 'cmd' : 'sh';
@@ -20,6 +20,10 @@ afterEach(async () => {
   await rm(testConfigHome, { recursive: true, force: true });
   delete process.env.WORKDAY_AWARE_CONFIG_HOME;
 });
+
+const adapterEnv = home => ({ WORKDAY_AWARE_CONFIG_HOME: testConfigHome, XDG_CONFIG_HOME: join(home, '.config'), APPDATA: join(home, 'AppData', 'Roaming') });
+const installAdapters = ({ home, env = adapterEnv(home), ...options }) => installAdapterConfiguration({ home, env, ...options });
+const preflightAdapters = ({ home, env = adapterEnv(home), ...options }) => preflightAdapterConfiguration({ home, env, ...options });
 
 async function runNativeWrapper(wrapper, env = {}) {
   const executable = process.platform === 'win32' ? (process.env.ComSpec || 'cmd.exe') : wrapper;
@@ -111,6 +115,8 @@ test('POSIX wrapper discards stdin, passes canonical hook output, and fails open
   assert.match(wrapperSource, /sleep 3/);
   assert.doesNotMatch(wrapperSource, /command -v timeout/);
   const child = spawn(wrapper, [], { stdio: ['pipe', 'pipe', 'pipe'] });
+  const stdinErrors = [];
+  child.stdin.on('error', error => { stdinErrors.push(error); });
   child.stdin.end('untrusted stdin');
   let stdout = '';
   child.stdout.on('data', value => { stdout += value; });
@@ -119,6 +125,7 @@ test('POSIX wrapper discards stdin, passes canonical hook output, and fails open
   const output = JSON.parse(stdout);
   assert.equal(output.hookSpecificOutput.hookEventName, 'UserPromptSubmit');
   assert.match(output.hookSpecificOutput.additionalContext, /wrap-up/);
+  assert.ok(stdinErrors.every(error => error.code === 'EPIPE'));
 });
 
 test('native wrapper returns valid fail-open JSON when the runtime fails', async () => {
@@ -273,6 +280,9 @@ test('Windows wrappers enforce the same three second fail-open deadline and conf
   const wrapper = await readFile(join(dataDir(home, env, 'win32'), 'adapters', 'gemini-cli.cmd'), 'utf8');
   assert.match(wrapper, /WaitForExit\(3000\)/);
   assert.match(wrapper, /StandardInput\.Close/);
+  assert.match(wrapper, /\$null=\$p\.Start\(\)/);
+  assert.match(wrapper, /exit 1/);
+  assert.match(wrapper, /if errorlevel 1 echo \{"status":"status_unavailable","category":"adapter_hook_failed"\}/);
   const config = JSON.parse(await readFile(join(home, '.gemini', 'settings.json'), 'utf8'));
   assert.equal(config.hooks.BeforeAgent[0].hooks[0].timeout, 3000);
 });

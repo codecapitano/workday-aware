@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import test, { afterEach, beforeEach } from 'node:test';
 import { adapters, adapterStatus, installAdapters as installAdapterConfiguration, preflightAdapters as preflightAdapterConfiguration } from '../../adapters/index.mjs';
+import { wrapperScripts } from '../../skills/workday-aware/scripts/adapters.mjs';
 import { atomicRemove, dataDir, statePath, uninstallAdapter } from '../../skills/workday-aware/scripts/setup.mjs';
 
 const nativeWrapperExtension = process.platform === 'win32' ? 'cmd' : 'sh';
@@ -256,7 +257,7 @@ test('OpenCode uses the host config root while wrappers and state use the Workda
 
   assert.ok(await stat(join(env.XDG_CONFIG_HOME, 'opencode', 'opencode.json')));
   assert.ok(await stat(join(env.XDG_CONFIG_HOME, 'opencode', 'plugins', 'workday-aware.js')));
-  assert.ok(await stat(join(env.WORKDAY_AWARE_CONFIG_HOME, 'workday-aware', 'adapters', 'opencode.sh')));
+  assert.ok(await stat(join(env.WORKDAY_AWARE_CONFIG_HOME, 'workday-aware', 'adapters', `opencode.${nativeWrapperExtension}`)));
   assert.ok(await stat(statePath(home, env)));
   await assert.rejects(() => stat(join(env.XDG_CONFIG_HOME, 'workday-aware', 'state.json')));
 });
@@ -264,7 +265,7 @@ test('OpenCode uses the host config root while wrappers and state use the Workda
 test('OpenCode ignores a relative host configuration root', async () => {
   const home = await mkdtemp(join(tmpdir(), 'workday-adapter-'));
   const config = join(home, '.config', 'opencode', 'opencode.json');
-  const env = { WORKDAY_AWARE_CONFIG_HOME: join(home, 'workday-config'), XDG_CONFIG_HOME: 'relative' };
+  const env = { WORKDAY_AWARE_CONFIG_HOME: join(home, 'workday-config'), XDG_CONFIG_HOME: 'relative', APPDATA: join(home, '.config') };
   await mkdir(join(home, '.config', 'opencode'), { recursive: true });
   await writeFile(config, '{invalid json\n');
 
@@ -278,13 +279,22 @@ test('Windows wrappers enforce the same three second fail-open deadline and conf
   const state = JSON.parse(await readFile(statePath(home, env, 'win32'), 'utf8'));
   assert.equal(state.targets[join(dataDir(home, env, 'win32'), 'adapters', 'gemini-cli.cmd')].platform, 'win32');
   const wrapper = await readFile(join(dataDir(home, env, 'win32'), 'adapters', 'gemini-cli.cmd'), 'utf8');
-  assert.match(wrapper, /WaitForExit\(3000\)/);
-  assert.match(wrapper, /StandardInput\.Close/);
-  assert.match(wrapper, /\$null=\$p\.Start\(\)/);
-  assert.match(wrapper, /exit 1/);
+  const payload = Buffer.from(wrapper.match(/powershell -NoProfile -EncodedCommand ([A-Za-z0-9+/=]+)/)[1], 'base64').toString('utf16le');
+  assert.match(payload, /WaitForExit\(3000\)/);
+  assert.match(payload, /StandardInput\.Close/);
+  assert.match(payload, /\[void\]\$p\.Start\(\)/);
+  assert.match(payload, /\$p\.Kill\(\)/);
+  assert.match(payload, /\[Console\]::Out\.WriteLine\('\{"status":"status_unavailable","category":"adapter_hook_failed"\}'\)/);
+  assert.match(payload, /exit 0/);
   assert.match(wrapper, /if errorlevel 1 echo \{"status":"status_unavailable","category":"adapter_hook_failed"\}/);
   const config = JSON.parse(await readFile(join(home, '.gemini', 'settings.json'), 'utf8'));
   assert.equal(config.hooks.BeforeAgent[0].hooks[0].timeout, 3000);
+});
+
+test('Windows wrapper escapes apostrophes in the encoded PowerShell payload', () => {
+  const wrapper = wrapperScripts("C:\\Users\\O'Brien\\workday-aware.mjs", 'codex').windows;
+  const payload = Buffer.from(wrapper.match(/powershell -NoProfile -EncodedCommand ([A-Za-z0-9+/=]+)/)[1], 'base64').toString('utf16le');
+  assert.match(payload, /O''Brien/);
 });
 
 test('uninstall removes every unchanged owned adapter entry and preserves unrelated host configuration', async () => {

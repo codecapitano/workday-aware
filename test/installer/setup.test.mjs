@@ -5,14 +5,23 @@ import { join } from 'node:path';
 import test, { afterEach, beforeEach } from 'node:test';
 import { configure, dataDir, detectIntegration, digest, installJsonEntry, previewJsonEntry, purgeUserState, runSetup, statePath, trustProject, uninstallAdapter, uninstallJsonEntry } from '../../skills/workday-aware/scripts/setup.mjs';
 
+const nativeWrapperExtension = process.platform === 'win32' ? 'cmd' : 'sh';
 let testConfigHome;
+let testHostConfigHome;
+let originalXdgConfigHome;
 beforeEach(async () => {
   testConfigHome = await mkdtemp(join(tmpdir(), 'workday-installer-config-'));
+  testHostConfigHome = await mkdtemp(join(tmpdir(), 'workday-installer-host-config-'));
+  originalXdgConfigHome = process.env.XDG_CONFIG_HOME;
   process.env.WORKDAY_AWARE_CONFIG_HOME = testConfigHome;
+  process.env.XDG_CONFIG_HOME = testHostConfigHome;
 });
 afterEach(async () => {
   await rm(testConfigHome, { recursive: true, force: true });
+  await rm(testHostConfigHome, { recursive: true, force: true });
   delete process.env.WORKDAY_AWARE_CONFIG_HOME;
+  if (originalXdgConfigHome === undefined) delete process.env.XDG_CONFIG_HOME;
+  else process.env.XDG_CONFIG_HOME = originalXdgConfigHome;
 });
 
 async function fixture() {
@@ -33,7 +42,7 @@ test('preview redacts unrelated values and install is atomic and idempotent', as
   assert.deepEqual(JSON.parse(await readFile(target, 'utf8')).hooks, { keep: true });
   const state = JSON.parse(await readFile(statePath(home), 'utf8'));
   const backup = state.targets[target].backupPath;
-  assert.equal((await stat(backup)).mode & 0o777, 0o640);
+  if (process.platform !== 'win32') assert.equal((await stat(backup)).mode & 0o777, 0o640);
 });
 
 test('configure previews, requires confirmation, validates settings, and preserves trusted projects', async () => {
@@ -91,7 +100,7 @@ test('setup rejects invalid host configuration before writing Workday files', as
   await assert.rejects(() => runSetup(['setup', '--confirm', '--adapter', 'codex'], { home, write: () => {} }), /invalid JSON/i);
 
   await assert.rejects(() => stat(join(dataDir(home), 'config.json')));
-  await assert.rejects(() => stat(join(dataDir(home), 'adapters', 'codex.sh')));
+  await assert.rejects(() => stat(join(dataDir(home), 'adapters', `codex.${nativeWrapperExtension}`)));
   await assert.rejects(() => stat(join(dataDir(home), 'adapters', 'codex.cmd')));
   await assert.rejects(() => stat(statePath(home)));
 });
@@ -104,34 +113,34 @@ test('setup rejects malformed host hook structures before writing Workday files'
   await assert.rejects(() => runSetup(['setup', '--confirm', '--adapter', 'codex'], { home, write: () => {} }), /invalid hook configuration/i);
 
   await assert.rejects(() => stat(join(dataDir(home), 'config.json')));
-  await assert.rejects(() => stat(join(dataDir(home), 'adapters', 'codex.sh')));
+  await assert.rejects(() => stat(join(dataDir(home), 'adapters', `codex.${nativeWrapperExtension}`)));
   await assert.rejects(() => stat(statePath(home)));
 });
 
 test('setup rejects malformed OpenCode plugin structures before writing Workday files', async () => {
   const home = await mkdtemp(join(tmpdir(), 'workday-aware-'));
-  const config = join(home, '.config', 'opencode', 'opencode.json');
-  await mkdir(join(home, '.config', 'opencode'), { recursive: true });
+  const config = join(testHostConfigHome, 'opencode', 'opencode.json');
+  await mkdir(join(testHostConfigHome, 'opencode'), { recursive: true });
   await writeFile(config, '{"plugins":{}}\n');
 
   await assert.rejects(() => runSetup(['setup', '--confirm', '--adapter', 'opencode'], { home, write: () => {} }), /invalid plugin configuration/i);
 
   await assert.rejects(() => stat(join(dataDir(home), 'config.json')));
-  await assert.rejects(() => stat(join(dataDir(home), 'adapters', 'opencode.sh')));
+  await assert.rejects(() => stat(join(dataDir(home), 'adapters', `opencode.${nativeWrapperExtension}`)));
   await assert.rejects(() => stat(statePath(home)));
 });
 
 test('setup rejects unmanaged adapter files before writing Workday configuration', async () => {
   const home = await mkdtemp(join(tmpdir(), 'workday-aware-'));
-  const plugin = join(home, '.config', 'opencode', 'plugins', 'workday-aware.js');
-  await mkdir(join(home, '.config', 'opencode', 'plugins'), { recursive: true });
+  const plugin = join(testHostConfigHome, 'opencode', 'plugins', 'workday-aware.js');
+  await mkdir(join(testHostConfigHome, 'opencode', 'plugins'), { recursive: true });
   await writeFile(plugin, 'user-managed plugin\n');
 
   await assert.rejects(() => runSetup(['setup', '--confirm', '--adapter', 'opencode'], { home, write: () => {} }), /unmanaged target/i);
 
   assert.equal(await readFile(plugin, 'utf8'), 'user-managed plugin\n');
   await assert.rejects(() => stat(join(dataDir(home), 'config.json')));
-  await assert.rejects(() => stat(join(dataDir(home), 'adapters', 'opencode.sh')));
+  await assert.rejects(() => stat(join(dataDir(home), 'adapters', `opencode.${nativeWrapperExtension}`)));
   await assert.rejects(() => stat(statePath(home)));
 });
 
@@ -282,7 +291,7 @@ test('command-line purge retains state when an adapter host config changed', asy
 
   assert.equal(JSON.parse(output[0]).status, 'partial');
   assert.equal(JSON.parse(await readFile(configPath, 'utf8')).external, true);
-  assert.ok(await stat(join(dataDir(home), 'adapters', 'codex.sh')));
+  assert.ok(await stat(join(dataDir(home), 'adapters', `codex.${nativeWrapperExtension}`)));
   assert.ok(await stat(statePath(home)));
 });
 

@@ -15,6 +15,7 @@ export const adapters = Object.freeze({
 });
 export function adapterStatus(name) { if (!adapters[name]) throw new Error(`unknown adapter: ${name}`); return { name, ...adapters[name] }; }
 const quote = value => `'${value.replaceAll("'", "'\\''")}'`;
+const powerShellQuote = value => `'${value.replaceAll("'", "''")}'`;
 const json = value => JSON.stringify(value, null, 2) + '\n';
 const hostConfigHome = (home, platform, env) => {
   const candidates = [env.XDG_CONFIG_HOME, platform === 'win32' ? env.APPDATA : join(home, '.config')];
@@ -91,8 +92,9 @@ function openCodePlugin(core) {
   return `import { Plugin } from \"@opencode/plugin\";\n\nexport default Plugin.define({\n  id: \"workday-aware\",\n  async setup(ctx) {\n    await ctx.session.hook(\"context\", (event) => {\n      try {\n        const result = Bun.spawnSync([\"node\", ${JSON.stringify(core)}, \"hook\", \"--adapter\", \"opencode\"], { stdin: \"ignore\", stdout: \"pipe\", stderr: \"ignore\", timeout: 3000 });\n        const payload = JSON.parse(new TextDecoder().decode(result.stdout));\n        if (payload.context) event.system.push({ text: payload.context });\n      } catch {}\n    });\n  },\n});\n`;
 }
 
-function wrapperScripts(core, hookAdapter) {
-  const windows = `@echo off\r\npowershell -NoProfile -Command "$p=New-Object System.Diagnostics.Process; $p.StartInfo.FileName='node'; $p.StartInfo.Arguments='\"${core.replaceAll("'", "''")}\" hook --adapter ${hookAdapter}'; $p.StartInfo.UseShellExecute=$false; $p.StartInfo.RedirectStandardInput=$true; $p.StartInfo.RedirectStandardOutput=$true; $null=$p.Start(); $p.StandardInput.Close(); if($p.WaitForExit(3000) -and $p.ExitCode -eq 0){[Console]::Out.Write($p.StandardOutput.ReadToEnd()); exit 0}else{if(-not $p.HasExited){$p.Kill()}; exit 1}"\r\nif errorlevel 1 echo {"status":"status_unavailable","category":"adapter_hook_failed"}\r\nexit /b 0\r\n`;
+export function wrapperScripts(core, hookAdapter) {
+  const windowsPayload = `$ErrorActionPreference = 'Stop'\ntry {\n  $p = New-Object System.Diagnostics.Process\n  $p.StartInfo.FileName = 'node'\n  $p.StartInfo.Arguments = ('"{0}" hook --adapter {1}' -f ${powerShellQuote(core)}, ${powerShellQuote(hookAdapter)})\n  $p.StartInfo.UseShellExecute = $false\n  $p.StartInfo.RedirectStandardInput = $true\n  $p.StartInfo.RedirectStandardOutput = $true\n  [void]$p.Start()\n  $p.StandardInput.Close()\n  if ($p.WaitForExit(3000) -and $p.ExitCode -eq 0) {\n    [Console]::Out.Write($p.StandardOutput.ReadToEnd())\n  } else {\n    if (-not $p.HasExited) { $p.Kill(); $p.WaitForExit() }\n    [Console]::Out.WriteLine('{"status":"status_unavailable","category":"adapter_hook_failed"}')\n  }\n  exit 0\n} catch {\n  [Console]::Out.WriteLine('{"status":"status_unavailable","category":"adapter_hook_failed"}')\n  exit 0\n}\n`;
+  const windows = `@echo off\r\npowershell -NoProfile -EncodedCommand ${Buffer.from(windowsPayload, 'utf16le').toString('base64')} 2>nul\r\nif errorlevel 1 echo {"status":"status_unavailable","category":"adapter_hook_failed"}\r\nexit /b 0\r\n`;
   const posix = `#!/bin/sh\n# Prompt stdin is intentionally discarded; hooks must fail open.\nexec </dev/null\nnode ${quote(core)} hook --adapter ${quote(hookAdapter)} &\nhook_pid=$!\n(\n  sleep 3\n  kill -TERM "$hook_pid" 2>/dev/null\n) >/dev/null 2>&1 &\nguard_pid=$!\nif wait "$hook_pid"; then\n  hook_status=0\nelse\n  hook_status=$?\nfi\nkill "$guard_pid" 2>/dev/null\nwait "$guard_pid" 2>/dev/null\nif [ "$hook_status" -ne 0 ]; then\n  printf '%s\\n' '{"status":"status_unavailable","category":"adapter_hook_failed"}'\nfi\nexit 0\n`;
   return { windows, posix };
 }

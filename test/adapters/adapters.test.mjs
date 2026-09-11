@@ -28,7 +28,7 @@ const preflightAdapters = ({ home, env = adapterEnv(home), ...options }) => pref
 
 async function runNativeWrapper(wrapper, env = {}) {
   const executable = process.platform === 'win32' ? (process.env.ComSpec || 'cmd.exe') : wrapper;
-  const args = process.platform === 'win32' ? ['/d', '/s', '/c', `"${wrapper}"`] : [];
+  const args = process.platform === 'win32' ? ['/d', '/s', '/c', wrapper] : [];
   const child = spawn(executable, args, { env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
   let stdout = '';
   let stderr = '';

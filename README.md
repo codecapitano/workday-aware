@@ -14,10 +14,18 @@ I built it because coding agents make it too easy to keep going past the end of 
 
 Requirements: Node.js 20 or later and a supported coding agent.
 
-Install the `v1.0.0` release with the pinned Vercel Skills CLI. npm provides the installer; GitHub provides the skill:
+Install the `v1.0.0` release with the pinned Vercel Skills CLI. These default commands opt out of the Vercel audit and telemetry. npm provides the installer; GitHub provides the skill:
+
+macOS/Linux:
 
 ```sh
-npx skills@1.5.25 add https://github.com/codecapitano/workday-aware/tree/v1.0.0 --global
+DO_NOT_TRACK=1 npx skills@1.5.25 add https://github.com/codecapitano/workday-aware/tree/v1.0.0 --global
+```
+
+Windows PowerShell:
+
+```powershell
+$env:DO_NOT_TRACK = "1"; npx skills@1.5.25 add https://github.com/codecapitano/workday-aware/tree/v1.0.0 --global
 ```
 
 Then ask the agent:
@@ -48,7 +56,7 @@ Other tools are currently unsupported.
 
 The runtime reads only local configuration, the current time, and explicit command arguments. Hook input is discarded, and prompts are never read. Workday Aware itself has no runtime network access, telemetry, daemon, or Model Context Protocol (MCP) server.
 
-For public GitHub sources, the pinned Vercel Skills CLI contacts Vercel for a pre-install audit and anonymous post-install usage telemetry. The audit sends the repository and selected skill names. Usage telemetry includes the repository, selected skill names and repository-relative paths, target agents, global-install flag, CLI version, continuous-integration marker, and detected agent. Set `DISABLE_TELEMETRY=1` or `DO_NOT_TRACK=1` when running the installer to opt out of both. See the [pinned v1.5.25 telemetry source](https://github.com/vercel-labs/skills/blob/v1.5.25/src/telemetry.ts).
+For public GitHub sources, the pinned Vercel Skills CLI contacts Vercel for a pre-install audit and anonymous post-install usage telemetry. The audit sends the repository and selected skill names. Usage telemetry includes the repository, selected skill names and repository-relative paths, target agents, global-install flag, CLI version, continuous-integration marker, and detected agent. The default commands above opt out of both. Either `DO_NOT_TRACK=1` or `DISABLE_TELEMETRY=1` disables both. See the [pinned v1.5.25 telemetry source](https://github.com/vercel-labs/skills/blob/v1.5.25/src/telemetry.ts).
 
 Your coding agent may retain the injected timezone, schedule, and status text according to its own data-retention policy. Report vulnerabilities through the [security policy](SECURITY.md).
 

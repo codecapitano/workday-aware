@@ -1,6 +1,6 @@
 # Workday Aware
 
-Workday Aware helps coding agents respect your working hours. It estimates substantial tasks against your configured schedule, including wrap-up and end-of-day boundaries, and warns when work may run late. 
+Workday Aware helps coding agents respect your working hours. It estimates substantial tasks against your configured schedule, including wrap-up and end-of-day boundaries, and warns when work may run late.
 You can then choose a smaller slice, defer the task, or explicitly continue, while the agent prioritizes verification, cleanup, and handoff as the day winds down.
 
 **Examples**

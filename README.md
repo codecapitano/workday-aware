@@ -1,8 +1,7 @@
 # Workday Aware
 
-Checks whether meaningful coding-agent work fits before wrap-up and end of day.
-
-I built it because coding agents make it too easy to keep going past the end of the day: one more test, one more fix, one more interesting idea. Workday Aware gives the agent a clear stopping point, so it can suggest a smaller final task instead of pulling you into another hour of work.
+Workday Aware helps coding agents respect your working hours. It estimates substantial tasks against your configured schedule, including wrap-up and end-of-day boundaries, and warns when work may run late. 
+You can then choose a smaller slice, defer the task, or explicitly continue, while the agent prioritizes verification, cleanup, and handoff as the day winds down.
 
 **Examples**
 <img width="786" height="101" alt="Screenshot 2026-09-10 at 17 58 31" src="https://github.com/user-attachments/assets/21e3bee4-5c2c-48d8-8c3f-47e35c9c30ab" />

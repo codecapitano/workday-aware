@@ -28,3 +28,46 @@ jobs:
           DISABLE_TELEMETRY: "1"
           DO_NOT_TRACK: "1"
           HOME: ${{ runner.temp }}/skills-home
+      - name: Use Node.js 22.19 for Pi verification
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.19.0
+      - name: Verify Pi package discovery
+        shell: node {0}
+        run: |
+          const { mkdirSync, rmSync } = require("node:fs");
+          const { join, resolve } = require("node:path");
+          const { spawnSync } = require("node:child_process");
+          const temp = process.env.RUNNER_TEMP || require("node:os").tmpdir();
+          const isolated = {
+            HOME: "pi-home",
+            USERPROFILE: "pi-userprofile",
+            APPDATA: "pi-appdata",
+            XDG_CONFIG_HOME: "pi-xdg-config",
+            WORKDAY_AWARE_CONFIG_HOME: "pi-workday-config",
+            PI_CODING_AGENT_DIR: "pi-coding-agent",
+            PI_PACKAGE_DIR: "pi-package-dir",
+          };
+          for (const [name, directory] of Object.entries(isolated)) {
+            const value = join(temp, directory);
+            rmSync(value, { recursive: true, force: true });
+            mkdirSync(value, { recursive: true });
+            process.env[name] = value;
+          }
+          process.env.PI_OFFLINE = "1";
+          process.env.PI_SKIP_VERSION_CHECK = "1";
+          process.env.PI_TELEMETRY = "0";
+          const prefix = join(temp, "pi-0.87.1-prefix");
+          rmSync(prefix, { recursive: true, force: true });
+          mkdirSync(prefix, { recursive: true });
+          const command = process.platform === "win32" ? "npm.cmd" : "npm";
+          const run = (file, args, options = {}) => {
+            const result = spawnSync(file, args, { stdio: "inherit", shell: process.platform === "win32", ...options });
+            if (result.error) throw result.error;
+            if (result.status !== 0) process.exit(result.status ?? 1);
+          };
+          run(command, ["install", "--no-save", "--no-package-lock", "@earendil-works/pi-coding-agent@0.87.1"], { cwd: prefix });
+          const pi = join(prefix, "node_modules", ".bin", process.platform === "win32" ? "pi.cmd" : "pi");
+          process.env.PI_CODING_AGENT_MODULE = resolve(prefix, "node_modules", "@earendil-works", "pi-coding-agent", "dist", "index.js");
+          run(pi, ["install", "."], { cwd: process.cwd(), env: process.env });
+          run(command, ["run", "test:pi-package"], { cwd: process.cwd(), env: process.env });

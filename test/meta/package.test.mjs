@@ -28,6 +28,28 @@ test('essential documentation exists and is linked', () => {
   }
 });
 
+test('documented installation pins match the package version', () => {
+  const { version } = JSON.parse(read('package.json'));
+  const readme = read('README.md');
+  assert.match(readme, new RegExp(`tree/v${version}`));
+  assert.match(readme, new RegExp(`workday-aware@v${version.replaceAll('.', '\\.')}`));
+  assert.doesNotMatch(readme, /(?:tree\/v1\.0\.0|@v1\.0\.0)/);
+  assert.match(readme, /Native Pi integration requires Node\.js 22\.19 or later/);
+  assert.match(read('docs/configuration.md'), new RegExp(`pi remove git:github\\.com/codecapitano/workday-aware@v${version.replaceAll('.', '\\.')}`));
+});
+
+test('Pi setup is adapter-free and preview and confirmation stay separate', () => {
+  const skill = read('skills/workday-aware/SKILL.md');
+  const configuration = read('skills/workday-aware/references/configuration.md');
+  assert.match(skill, /AI_AGENT=pi/);
+  assert.match(skill, /PI_CODING_AGENT=true/);
+  assert.match(skill, /setup --preview` without an adapter/);
+  assert.doesNotMatch(skill, /--adapter pi/);
+  assert.match(skill, /Never pass `--preview` and `--confirm` together/);
+  assert.match(configuration, /replace `--preview` with `--confirm`/);
+  assert.match(configuration, /Never pass `--preview` and `--confirm` together/);
+});
+
 test('installation privacy, trust, and disclosure guidance match the supported distribution', () => {
   const readme = read('README.md');
   assert.match(readme, /public GitHub sources/);
@@ -50,19 +72,27 @@ test('installation privacy, trust, and disclosure guidance match the supported d
   assert.match(security, /requires private vulnerability reporting to be enabled/);
 });
 
-test('distribution retains only the Skills CLI skill and native Codex metadata', () => {
+test('distribution retains the portable skill and adds an explicit Pi extension', () => {
   for (const file of ['plugin.json', '.codex-plugin/plugin.json', '.claude-plugin/plugin.json', 'gemini-extension.json', '.cursor-plugin/plugin.json']) {
     assert.equal(existsSync(join(root, file)), false, `unexpected distribution manifest ${file}`);
   }
   assert.ok(existsSync(join(root, 'skills/workday-aware/agents/openai.yaml')));
   assert.ok(existsSync(join(root, 'skills/workday-aware/scripts/adapters.mjs')));
+  assert.ok(existsSync(join(root, 'extensions/workday-aware.mjs')));
+  assert.ok(existsSync(join(root, 'extensions/runtime.mjs')));
 });
 
 test('package metadata and license are correct', () => {
   const packageJson = JSON.parse(read('package.json'));
+  assert.equal(packageJson.version, '1.1.0');
   assert.equal(packageJson.private, true);
   assert.equal(packageJson.license, 'MIT');
   assert.equal(packageJson.engines.node, '>=20');
+  assert.ok(packageJson.keywords.includes('pi-package'));
+  assert.deepEqual(packageJson.pi, {
+    extensions: ['./extensions/workday-aware.mjs'],
+    skills: ['./skills/workday-aware'],
+  });
   const license = read('LICENSE');
   assert.match(license, /^MIT License/m);
   assert.match(license, /Copyright \(c\) 2026 codecapitano/);
@@ -78,8 +108,9 @@ test('workflow uses read-only permissions and immutable action revisions', () =>
   assert.match(workflow, /DO_NOT_TRACK: "1"/);
 });
 
-test('package has no runtime external dependencies', () => {
+test('package declares only the Pi-supplied TypeBox peer', () => {
   const packageJson = JSON.parse(read('package.json'));
   assert.equal(packageJson.dependencies, undefined);
   assert.equal(packageJson.devDependencies, undefined);
+  assert.deepEqual(packageJson.peerDependencies, { typebox: '*' });
 });

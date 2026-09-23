@@ -219,6 +219,12 @@ test('setup rejects unknown options instead of silently ignoring them', async ()
   await assert.rejects(() => runSetup(['configure', '--preview', '--typo', 'value'], { home, write: () => {} }), /unknown option/i);
 });
 
+test('setup requires preview and confirmation to be separate invocations', async () => {
+  const home = await mkdtemp(join(tmpdir(), 'workday-aware-'));
+  await assert.rejects(() => runSetup(['setup', '--preview', '--confirm'], { home, write: () => {} }), /mutually exclusive/i);
+  await assert.rejects(() => runSetup(['configure', '--preview', '--confirm'], { home, write: () => {} }), /mutually exclusive/i);
+});
+
 test('offline doctor reports bounded integration health', async () => {
   const home = await mkdtemp(join(tmpdir(), 'workday-aware-'));
   const output = [];
@@ -226,6 +232,13 @@ test('offline doctor reports bounded integration health', async () => {
   const result = JSON.parse(output[0]);
   assert.equal(result.status, 'ok');
   assert.equal(result.runtime.nodeSupported, true);
+});
+
+test('integration doctor identifies a Pi-launched process without claiming extension state', async () => {
+  const home = await mkdtemp(join(tmpdir(), 'workday-aware-'));
+  const result = await detectIntegration(home, { env: { AI_AGENT: 'pi', PI_CODING_AGENT: 'true', XDG_CONFIG_HOME: join(home, '.config') } });
+  assert.equal(result.runtime.agent, 'pi');
+  assert.equal('pi' in result.adapters, false);
 });
 
 test('project trust accepts only an explicit Git root', async () => {

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { fileURLToPath } from 'node:url';
-import { assessWork, formatDurationRange, formatStatus, getWorkdayStatus, loadConfiguration } from './core.mjs';
+import { assessWork, formatAssessment, formatStatus, getWorkdayStatus, loadConfiguration } from './core.mjs';
 
 function parse(argumentsList) {
   const values = {};
@@ -82,18 +82,7 @@ export function run(argumentsList, { write = (line) => process.stdout.write(`${l
     }
     const assessment = assessWork(status, assessmentInput);
     if (values.json) write(JSON.stringify({ status, assessment }));
-    else {
-      const stateLabel = {
-        fits_before_wrap_up: 'fits before wrap-up',
-        may_fit: 'may fit before wrap-up',
-        uses_wrap_up: 'uses wrap-up',
-        exceeds_eod: 'exceeds end of day',
-        after_eod: 'after end of day',
-        no_boundary: 'no workday boundary',
-      }[assessment.state];
-      const guidance = ['fits_before_wrap_up', 'no_boundary'].includes(assessment.state) ? 'proceed' : assessment.state === 'after_eod' ? 'pause' : 'pause; propose a smaller slice';
-      write(`${formatStatus(status)}; estimate ${formatDurationRange(assessmentInput.minMinutes, assessmentInput.maxMinutes)}; ${stateLabel}; ${guidance}`);
-    }
+    else write(formatAssessment(status, assessmentInput));
     return 0;
   } catch (error) {
     return failure(error, write);

@@ -110,7 +110,7 @@ test('ignores relative global configuration roots', () => {
   const originalCwd = process.cwd();
   process.chdir(fixture);
   try {
-    const config = loadConfiguration({ cwd: fixture, env: { WORKDAY_AWARE_CONFIG_HOME: 'config' } });
+    const config = loadConfiguration({ cwd: fixture, env: { WORKDAY_AWARE_CONFIG_HOME: 'config', XDG_CONFIG_HOME: join(fixture, 'isolated-config') } });
     assert.equal(config.source, 'defaults');
     assert.equal(config.timezone, Intl.DateTimeFormat().resolvedOptions().timeZone);
   } finally {

@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { validateConfiguration } from './core.mjs';
 
 const schema = 1;
-const version = '1.0.0';
+const version = '1.1.0';
 const stateName = 'state.json';
 
 export function dataDir(home = homedir(), env = process.env, platformName = process.platform) {
@@ -272,7 +272,8 @@ export async function detectIntegration(home = homedir(), { env = process.env, p
   const adapterAvailability = {};
   const extension = platformName === 'win32' ? 'cmd' : 'sh';
   for (const name of Object.keys(config)) adapterAvailability[name] = await exists(join(dataDir(home, env, platformName), 'adapters', `${name}.${extension}`));
-  return { runtime: { node: process.version, nodeSupported: Number(process.versions.node.split('.')[0]) >= 20, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }, config, adapters: adapterAvailability };
+  const agent = env.AI_AGENT === 'pi' || env.PI_CODING_AGENT === 'true' ? 'pi' : undefined;
+  return { runtime: { node: process.version, nodeSupported: Number(process.versions.node.split('.')[0]) >= 20, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, ...(agent ? { agent } : {}) }, config, adapters: adapterAvailability };
 }
 
 function optionValues(args, name) {
@@ -321,6 +322,7 @@ export async function runSetup(args, { home = process.env.HOME || homedir(), wri
   const [command, ...rest] = args;
   const confirm = rest.includes('--confirm');
   const preview = rest.includes('--preview');
+  if (confirm && preview) throw new Error('--preview and --confirm are mutually exclusive');
   const output = value => { write(JSON.stringify(value)); return 0; };
   if (command === 'doctor' || command === 'doctor-integration') {
     const health = await detectIntegration(home);

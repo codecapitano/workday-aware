@@ -26,8 +26,8 @@ test('formats compact durations without clock notation', () => {
 test('reports workday boundaries in the configured IANA timezone', () => {
   const status = getWorkdayStatus(config, new Date('2026-09-10T14:30:00.000Z'));
   assert.deepEqual(
-    { state: status.state, localTime: status.localTime, remainingToWrapUp: status.remainingToWrapUp, remainingToEndOfDay: status.remainingToEndOfDay },
-    { state: 'workday', localTime: '16:30', remainingToWrapUp: 30, remainingToEndOfDay: 60 },
+    { state: status.state, phase: status.phase, localDate: status.localDate, localTime: status.localTime, remainingToWrapUp: status.remainingToWrapUp, remainingToEndOfDay: status.remainingToEndOfDay },
+    { state: 'workday', phase: 'before_wrap_up', localDate: '2026-09-10', localTime: '16:30', remainingToWrapUp: 30, remainingToEndOfDay: 60 },
   );
 });
 
@@ -64,9 +64,16 @@ test('exposes the configured meaningful-work threshold to hooks and agents', () 
   assert.equal(status.meaningfulWorkMinutes, 20);
 });
 
-test('treats the end of day as after_eod and weekends as no_boundary', () => {
-  assert.equal(getWorkdayStatus(config, new Date('2026-09-10T15:30:00.000Z')).state, 'after_eod');
-  assert.equal(getWorkdayStatus(config, new Date('2026-09-12T10:00:00.000Z')).state, 'no_boundary');
+test('reports precise phases at wrap-up, end of day, and non-workdays', () => {
+  assert.equal(getWorkdayStatus(config, new Date('2026-09-10T14:59:59.000Z')).phase, 'before_wrap_up');
+  assert.equal(getWorkdayStatus(config, new Date('2026-09-10T15:00:00.000Z')).phase, 'wrap_up');
+  const endOfDay = getWorkdayStatus(config, new Date('2026-09-10T15:30:00.000Z'));
+  assert.equal(endOfDay.state, 'after_eod');
+  assert.equal(endOfDay.phase, 'after_eod');
+  const weekend = getWorkdayStatus(config, new Date('2026-09-12T10:00:00.000Z'));
+  assert.equal(weekend.state, 'no_boundary');
+  assert.equal(weekend.phase, 'no_boundary');
+  assert.equal(weekend.localDate, '2026-09-12');
 });
 
 test('assesses all exact schedule boundaries', () => {

@@ -83,10 +83,10 @@ export function getWorkdayStatus(configuration = {}, now = new Date()) {
   const wrapUpBoundary = localBoundary(local, wrapUpMinute, config.timezone, formatter);
   const endOfDayBoundary = localBoundary(local, endOfDayMinute, config.timezone, formatter);
   const remaining = (boundary) => Math.max(0, Math.floor((boundary.valueOf() - now.valueOf()) / 60000));
-  const base = { timezone: config.timezone, localTime: local.localTime, endOfDay: config.endOfDay, wrapUp: `${String(Math.floor(wrapUpMinute / 60)).padStart(2, '0')}:${String(wrapUpMinute % 60).padStart(2, '0')}`, meaningfulWorkMinutes: config.meaningfulWorkMinutes, remainingToWrapUp: remaining(wrapUpBoundary), remainingToEndOfDay: remaining(endOfDayBoundary), source, warnings };
-  if (!config.workDays.includes(local.weekday)) return { ...base, state: 'no_boundary' };
-  if (now >= endOfDayBoundary) return { ...base, state: 'after_eod' };
-  return { ...base, state: 'workday' };
+  const base = { timezone: config.timezone, localDate: `${local.year}-${String(local.month).padStart(2, '0')}-${String(local.day).padStart(2, '0')}`, localTime: local.localTime, endOfDay: config.endOfDay, wrapUp: `${String(Math.floor(wrapUpMinute / 60)).padStart(2, '0')}:${String(wrapUpMinute % 60).padStart(2, '0')}`, meaningfulWorkMinutes: config.meaningfulWorkMinutes, remainingToWrapUp: remaining(wrapUpBoundary), remainingToEndOfDay: remaining(endOfDayBoundary), source, warnings };
+  if (!config.workDays.includes(local.weekday)) return { ...base, state: 'no_boundary', phase: 'no_boundary' };
+  if (now >= endOfDayBoundary) return { ...base, state: 'after_eod', phase: 'after_eod' };
+  return { ...base, state: 'workday', phase: now >= wrapUpBoundary ? 'wrap_up' : 'before_wrap_up' };
 }
 
 export function assessWork(status, { minMinutes, maxMinutes = minMinutes, kind } = {}) {
@@ -99,6 +99,21 @@ export function assessWork(status, { minMinutes, maxMinutes = minMinutes, kind }
   if (minMinutes <= status.remainingToWrapUp) return { state: 'may_fit', kind };
   if (maxMinutes <= status.remainingToEndOfDay) return { state: 'uses_wrap_up', kind };
   return { state: 'exceeds_eod', kind };
+}
+
+export function formatAssessment(status, input) {
+  const assessment = assessWork(status, input);
+  const maxMinutes = input.maxMinutes ?? input.minMinutes;
+  const stateLabel = {
+    fits_before_wrap_up: 'fits before wrap-up',
+    may_fit: 'may fit before wrap-up',
+    uses_wrap_up: 'uses wrap-up',
+    exceeds_eod: 'exceeds end of day',
+    after_eod: 'after end of day',
+    no_boundary: 'no workday boundary',
+  }[assessment.state];
+  const guidance = ['fits_before_wrap_up', 'no_boundary'].includes(assessment.state) ? 'proceed' : assessment.state === 'after_eod' ? 'pause' : 'pause; propose a smaller slice';
+  return `${formatStatus(status)}; estimate ${formatDurationRange(input.minMinutes, maxMinutes)}; ${stateLabel}; ${guidance}`;
 }
 
 function readJson(path, project) {

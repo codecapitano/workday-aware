@@ -15,7 +15,7 @@ assert.deepEqual(skills.diagnostics, []);
 
 const loaded = loader.getExtensions();
 assert.deepEqual(loaded.errors, []);
-const matchingExtensions = loaded.extensions.filter((extension) => extension.path.endsWith('extensions/workday-aware.mjs'));
+const matchingExtensions = loaded.extensions.filter((extension) => extension.path.replaceAll('\\', '/').endsWith('extensions/workday-aware.mjs'));
 assert.equal(matchingExtensions.length, 1);
 const extension = matchingExtensions[0];
 assert.deepEqual([...extension.commands.keys()], ['workday']);

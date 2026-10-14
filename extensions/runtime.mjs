@@ -15,12 +15,13 @@ export function assessStatus(status, input) {
   return { assessment: assessWork(status, input), text: formatAssessment(status, input) };
 }
 
-export function buildWorkdayGuidance(status) {
+export function buildWorkdayGuidance(status, { conciseUI = false } = {}) {
   return [
     `Current Workday status: ${formatStatus(status)}.`,
     `Before non-trivial work with a pessimistic maximum estimate of at least ${formatDuration(status.meaningfulWorkMinutes)}, call workday_assess with the estimate and task kind.`,
     "If the assessment may cross wrap-up, uses wrap-up, exceeds end of day, or starts after end of day, report it and pause for the user's decision before starting.",
     'Apply an explicit override only to the current task. Do not silently split or defer work.',
+    ...(conciseUI ? ['In the TUI, include a short task name in workday_assess. Its result is already visible; do not repeat its estimate, times, or verdict in your reply. When a decision is required, ask one short approval question.'] : []),
   ].join('\n');
 }
 

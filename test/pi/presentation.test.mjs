@@ -78,6 +78,61 @@ function completed(status, input, options = {}) {
 }
 const render = (component, width = 80) => component.render(width);
 
+test('renders an optional task label on completed and pending assessments', () => {
+  const status = { ...schedule, state: 'after_eod', phase: 'after_eod', remainingToWrapUp: 0, remainingToEndOfDay: 0 };
+  const result = { content: [{ type: 'text', text: 'result' }], details: { status, assessment: { state: 'after_eod' }, task: 'Investigate Workday UX' } };
+  const lines = render(presentation.renderResult(result, {}, theme, { args: { minimumMinutes: 15, maximumMinutes: 25, task: 'fallback task' } }));
+  assert.deepEqual(lines.map(strip), ['Investigate Workday UX', '', '15–25 minutes · After hours']);
+  assert.match(lines[0], /^\x1b\[31m\x1b\[1m/);
+  assert.match(lines[2], /\x1b\[1m15–25 minutes\x1b\[22m/);
+  const pending = render(presentation.renderCall({ minimumMinutes: 15, maximumMinutes: 25, task: 'Investigate Workday UX' }, theme, { args: { task: 'Investigate Workday UX' }, isPartial: true }));
+  assert.deepEqual(pending.map(strip), ['Investigate Workday UX', '', '15–25 minutes · Assessing…']);
+});
+
+test('uses the task name from call arguments when result metadata has no label', () => {
+  const result = assessStatus(schedule, { minMinutes: 10, kind: 'research' });
+  const value = { content: [{ type: 'text', text: result.text }], details: { status: schedule, assessment: result.assessment } };
+  const lines = plainOf(presentation.renderResult(value, { expanded: true }, theme, { args: { minimumMinutes: 10, task: 'Check the installation' } }));
+  assert.equal(lines[0], 'Check the installation');
+  assert.match(lines.join(' '), /10 minutes · Fits before wrap-up/);
+  assert.doesNotMatch(lines.join(' '), /Estimated work:|You have/);
+  assert.match(lines.join(' '), /Kind: research/);
+  assert.match(lines.join(' '), /Timezone: Europe\/Berlin/);
+  assert.doesNotMatch(lines.join(' '), /Your decision needed/);
+});
+
+test('named task assessments show the verdict without repeating timing or the decision question', () => {
+  for (const [minimum, maximum, state, verdict] of [
+    [20, 40, 'may_fit', 'May cross wrap-up'],
+    [40, 50, 'uses_wrap_up', 'Uses wrap-up'],
+    [40, 90, 'exceeds_eod', 'Exceeds end of day'],
+  ]) {
+    const result = assessStatus(schedule, { minMinutes: minimum, maxMinutes: maximum, kind: 'research' });
+    assert.equal(result.assessment.state, state);
+    const value = { content: [{ type: 'text', text: result.text }], details: { status: schedule, assessment: result.assessment, task: 'Investigate UX' } };
+    const lines = render(presentation.renderResult(value, {}, theme, { args: { minimumMinutes: minimum, maximumMinutes: maximum } }));
+    assert.equal(strip(lines[0]), 'Investigate UX');
+    assert.ok(lines[0].startsWith(state === 'exceeds_eod' ? '\x1b[31m' : '\x1b[33m'));
+    assert.equal(strip(lines.at(-1)), `${minimum}–${maximum} minutes · ${verdict}`);
+    assert.equal(lines.length, 3);
+    assert.doesNotMatch(lines.map(strip).join(' '), /Your decision needed|You have|until wrap-up|until end of day/);
+  }
+});
+
+test('cleans task labels and preserves fallback headings for absent, error, and unavailable tasks', () => {
+  const value = { content: [{ type: 'text', text: 'ok' }], details: { status: schedule, assessment: { state: 'fits_before_wrap_up' }, task: '  alpha\n\x1b[2J beta  ' } };
+  const cleaned = plainOf(presentation.renderResult(value, {}, theme, {})).join(' ');
+  assert.match(cleaned, /alpha beta/);
+  assert.doesNotMatch(cleaned, /\x1b|\n/);
+  const blank = { ...value, details: { ...value.details, task: '  ' } };
+  assert.equal(plainOf(presentation.renderResult(blank, {}, theme, {}))[0], 'Workday · Fits before wrap-up');
+  const error = render(presentation.renderResult({ content: [{ type: 'text', text: 'boom' }], details: { task: 'ignore me' } }, {}, theme, { isError: true }));
+  assert.equal(strip(error[0]), 'Workday · Assessment failed');
+  const unavailable = { content: [{ type: 'text', text: 'unavailable' }], details: { status: 'status_unavailable', task: 'ignore me' } };
+  assert.equal(strip(render(presentation.renderResult(unavailable, {}, theme, {}))[0]), 'Workday · Status unavailable');
+  for (const line of render(presentation.renderResult(value, {}, theme, {}), 12)) assert.ok(visibleWidth(line) <= 12);
+});
+
 test('declares self-rendered shell', () => {
   assert.equal(presentation.renderShell, 'self');
 });

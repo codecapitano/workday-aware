@@ -27,7 +27,8 @@ const empty = Object.freeze({ render: () => [], invalidate() {} });
 
 // eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/g;
-const clean = (value) => String(value ?? '').replaceAll('\t', ' ').replace(CONTROL, '');
+const clean = (value) => String(value ?? '').replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '').replaceAll('\t', ' ').replace(CONTROL, '');
+const taskOf = (value) => clean(value).replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
 const isMinutes = (value) => Number.isInteger(value) && value >= 0;
 const isClock = (value) => typeof value === 'string' && value.length > 0;
 
@@ -54,10 +55,11 @@ export function createWorkdayAssessPresentation({ visibleWidth, truncateToWidth,
   const wrap = (text, width) => wrapTextWithAnsi(text, Math.max(1, width)).map((line) => fit(line, width));
 
   // Each block is a paragraph; blank paragraphs separate sections.
-  function prose({ theme, width, pad, color, label, paragraphs }) {
+  function prose({ theme, width, pad, color, label, task, paragraphs }) {
     const margin = ' '.repeat(pad);
     const inner = Math.min(MAX_WIDTH, width - pad * 2);
-    const out = wrap(theme.fg(color, theme.bold(`Workday · ${label}`)), inner).map((line) => margin + line);
+    const heading = task || `Workday · ${label}`;
+    const out = wrap(theme.fg(color, theme.bold(heading)), inner).map((line) => margin + line);
     for (const paragraph of paragraphs) {
       out.push('');
       for (const line of wrap(paragraph, inner)) out.push(margin + line);
@@ -120,7 +122,7 @@ export function createWorkdayAssessPresentation({ visibleWidth, truncateToWidth,
     if (details?.status === 'status_unavailable') return { verdict: 'unavailable', text, status: undefined };
     const state = details?.assessment?.state;
     if (ASSESSMENT_STATES.has(state) && details.status && typeof details.status === 'object') {
-      return { verdict: state, text, status: details.status, kind: details.assessment.kind };
+      return { verdict: state, text, status: details.status, kind: details.assessment.kind, task: details.task };
     }
     return { verdict: 'plain', text, fallback: true };
   }
@@ -134,11 +136,17 @@ export function createWorkdayAssessPresentation({ visibleWidth, truncateToWidth,
     }
     const caution = VERDICTS[resolved.verdict].color === 'warning' || VERDICTS[resolved.verdict].color === 'error';
     const estimate = estimateOf(args, resolved.text);
+    const task = taskOf(resolved.task ?? args?.task);
     const sentences = [];
-    if (estimate) sentences.push(`Estimated work: ${bold(clean(estimate))}.`);
-    if (resolved.status) sentences.push(timing(resolved.status, resolved.verdict, caution, bold));
+    if (task) {
+      const verdict = resolved.verdict === 'after_eod' ? 'After hours' : VERDICTS[resolved.verdict].label;
+      sentences.push(estimate ? `${bold(clean(estimate))} · ${verdict}` : verdict);
+    } else {
+      if (estimate) sentences.push(`Estimated work: ${bold(clean(estimate))}.`);
+      if (resolved.status) sentences.push(timing(resolved.status, resolved.verdict, caution, bold));
+    }
     if (sentences.some(Boolean)) paragraphs.push(sentences.filter(Boolean).join(' '));
-    if (resolved.verdict !== 'unavailable' && caution) {
+    if (!task && resolved.verdict !== 'unavailable' && caution) {
       paragraphs.push(`${bold('Your decision needed.')} ${GUIDANCE[resolved.verdict]}`);
     }
     if (expanded) {
@@ -165,9 +173,11 @@ export function createWorkdayAssessPresentation({ visibleWidth, truncateToWidth,
       return component((width) => {
         const paragraphs = [];
         const estimate = estimateOf(args, '');
-        if (estimate) paragraphs.push(`Estimated work: ${theme.bold(clean(estimate))}.`);
+        const task = taskOf(args?.task);
+        if (task) paragraphs.push(estimate ? `${theme.bold(clean(estimate))} · Assessing…` : 'Assessing…');
+        else if (estimate) paragraphs.push(`Estimated work: ${theme.bold(clean(estimate))}.`);
         if (context.expanded && typeof args?.kind === 'string') paragraphs.push(theme.fg('muted', `Kind: ${clean(args.kind)}`));
-        return prose({ theme, width, pad: padFor(context, width), color: VERDICTS.pending.color, label: VERDICTS.pending.label, paragraphs });
+        return prose({ theme, width, pad: padFor(context, width), color: VERDICTS.pending.color, label: VERDICTS.pending.label, task, paragraphs });
       });
     },
 
@@ -177,7 +187,8 @@ export function createWorkdayAssessPresentation({ visibleWidth, truncateToWidth,
         const resolved = resolve(result, context);
         const { color, label } = VERDICTS[resolved.verdict];
         const paragraphs = resultParagraphs(resolved, context?.args, Boolean(options?.expanded ?? context?.expanded), theme);
-        return prose({ theme, width, pad: padFor(context, width), color, label, paragraphs });
+        const task = resolved.fallback || resolved.verdict === 'unavailable' ? '' : taskOf(resolved.task ?? context?.args?.task);
+        return prose({ theme, width, pad: padFor(context, width), color, label, task, paragraphs });
       });
     },
   };

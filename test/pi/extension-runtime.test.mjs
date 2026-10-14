@@ -28,6 +28,16 @@ test('builds bounded model guidance with the assessment threshold', () => {
   assert.doesNotMatch(guidance, /\/Users\//);
 });
 
+test('TUI guidance requests a named assessment and avoids repeated timing in the reply', () => {
+  const status = { ...base, phase: 'after_eod', meaningfulWorkMinutes: 15, source: 'global', warnings: [] };
+  const guidance = buildWorkdayGuidance(status, { conciseUI: true });
+  assert.match(guidance, /include a short task name/);
+  assert.match(guidance, /do not repeat its estimate, times, or verdict/);
+  assert.match(guidance, /ask one short approval question/);
+  assert.match(guidance, /pause for the user's decision/);
+  assert.doesNotMatch(buildWorkdayGuidance(status), /already visible|ask one short approval question/);
+});
+
 test('assesses work through the shared core formatter', () => {
   const status = { ...base, phase: 'before_wrap_up', state: 'workday', meaningfulWorkMinutes: 15, source: 'global', warnings: [] };
   const result = assessStatus(status, { minMinutes: 31, maxMinutes: 60, kind: 'verification' });

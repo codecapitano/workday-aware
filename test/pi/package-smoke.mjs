@@ -3,6 +3,9 @@ import { createRequire } from 'node:module';
 import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
+import { assessStatus } from '../../extensions/runtime.mjs';
+import { getWorkdayStatus } from '../../skills/workday-aware/scripts/core.mjs';
+
 // chalk disables bold on non-TTY output unless color is forced before Pi loads.
 process.env.FORCE_COLOR = '1';
 
@@ -59,17 +62,21 @@ process.env.PI_PACKAGE_DIR = dirname(dirname(modulePath));
 const { initTheme, theme } = await import(new URL('./modes/interactive/theme/theme.js', pathToFileURL(modulePath)).href);
 initTheme('dark', false);
 const renderArgs = { minimumMinutes: 15, maximumMinutes: 30, kind: 'research' };
+// Rendering assertions use a fixed workday, independent of the host clock and schedule.
+const renderStatus = getWorkdayStatus({ timezone: 'UTC' }, new Date('2026-09-10T12:00:00Z'));
+const renderAssessment = assessStatus(renderStatus, { minMinutes: 15, maxMinutes: 30, kind: 'research' });
+const renderResult = { content: [{ type: 'text', text: renderAssessment.text }], details: { status: renderStatus, assessment: renderAssessment.assessment } };
 const renderContext = { args: renderArgs, isPartial: false, isError: false, expanded: false, outputPad: 1 };
 const stripAnsi = (text) => text.replace(/\x1b\[[0-9;]*m/g, '');
 assert.deepEqual(definition.renderCall(renderArgs, theme, renderContext).render(80), []);
 assert.match(stripAnsi(definition.renderCall(renderArgs, theme, { ...renderContext, isPartial: true }).render(80).join('\n')), /Workday · Assessing…/);
-assert.deepEqual(definition.renderResult(toolResult, { expanded: false, isPartial: true }, theme, { ...renderContext, isPartial: true }).render(80), []);
+assert.deepEqual(definition.renderResult(renderResult, { expanded: false, isPartial: true }, theme, { ...renderContext, isPartial: true }).render(80), []);
 for (const width of [80, 64, 30, 12, 6]) {
-  const lines = definition.renderResult(toolResult, { expanded: true, isPartial: false }, theme, renderContext).render(width);
+  const lines = definition.renderResult(renderResult, { expanded: true, isPartial: false }, theme, renderContext).render(width);
   assert.ok(lines.length > 0);
   for (const line of lines) assert.ok(visibleWidth(line) <= width, `rendered line exceeds ${width} columns`);
 }
-const rendered = definition.renderResult(toolResult, { expanded: false, isPartial: false }, theme, renderContext).render(80);
+const rendered = definition.renderResult(renderResult, { expanded: false, isPartial: false }, theme, renderContext).render(80);
 const prose = rendered.map(stripAnsi);
 assert.equal(prose[0], ' Workday · Fits before wrap-up');
 assert.equal(prose[1], '');
@@ -82,7 +89,7 @@ assert.ok(rendered[0].includes('\x1b[') && rendered[0] !== prose[0]);
 assert.match(rendered[2], /\x1b\[1m15–30 minutes\x1b\[22m/);
 assert.ok(rendered.every((line) => visibleWidth(line) <= 80));
 // Bold must survive wrapping across lines in the real pi-tui wrapper.
-const narrow = definition.renderResult(toolResult, { expanded: false, isPartial: false }, theme, { ...renderContext, outputPad: 0 }).render(24);
+const narrow = definition.renderResult(renderResult, { expanded: false, isPartial: false }, theme, { ...renderContext, outputPad: 0 }).render(24);
 const estimateLine = narrow.find((line) => stripAnsi(line).includes('15–30'));
 assert.ok(estimateLine && estimateLine.slice(0, estimateLine.indexOf('15–30')).includes('\x1b[1m'), 'bold styling survives wrapping');
 assert.ok(narrow.every((line) => visibleWidth(line) <= 24));

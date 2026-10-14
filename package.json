@@ -1,6 +1,6 @@
 {
   "name": "workday-aware",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "private": true,
   "description": "Workday-aware task assessment for coding agents.",
   "license": "MIT",

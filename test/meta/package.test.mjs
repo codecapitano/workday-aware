@@ -84,7 +84,7 @@ test('distribution retains the portable skill and adds an explicit Pi extension'
 
 test('package metadata and license are correct', () => {
   const packageJson = JSON.parse(read('package.json'));
-  assert.equal(packageJson.version, '1.1.1');
+  assert.equal(packageJson.version, '1.2.0');
   assert.equal(packageJson.private, true);
   assert.equal(packageJson.license, 'MIT');
   assert.equal(packageJson.engines.node, '>=20');

@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
+
+// chalk disables bold on non-TTY output unless color is forced before Pi loads.
+process.env.FORCE_COLOR = '1';
 
 const modulePath = process.env.PI_CODING_AGENT_MODULE;
 if (!modulePath) throw new Error('PI_CODING_AGENT_MODULE must point to the pinned Pi dist/index.js');
@@ -44,6 +49,43 @@ const toolResult = await extension.tools.get('workday_assess').definition.execut
   context,
 );
 assert.match(toolResult.content[0].text, /estimate 15m–30m/);
+
+// Render through Pi's own pi-tui helpers and theme to exercise the plain-prose layout.
+const definition = extension.tools.get('workday_assess').definition;
+assert.equal(definition.renderShell, 'self');
+const { visibleWidth } = await import(pathToFileURL(createRequire(modulePath).resolve('@earendil-works/pi-tui')).href);
+// CI isolates PI_PACKAGE_DIR; theme assets live in the pinned Pi package, so point at it.
+process.env.PI_PACKAGE_DIR = dirname(dirname(modulePath));
+const { initTheme, theme } = await import(new URL('./modes/interactive/theme/theme.js', pathToFileURL(modulePath)).href);
+initTheme('dark', false);
+const renderArgs = { minimumMinutes: 15, maximumMinutes: 30, kind: 'research' };
+const renderContext = { args: renderArgs, isPartial: false, isError: false, expanded: false, outputPad: 1 };
+const stripAnsi = (text) => text.replace(/\x1b\[[0-9;]*m/g, '');
+assert.deepEqual(definition.renderCall(renderArgs, theme, renderContext).render(80), []);
+assert.match(stripAnsi(definition.renderCall(renderArgs, theme, { ...renderContext, isPartial: true }).render(80).join('\n')), /Workday · Assessing…/);
+assert.deepEqual(definition.renderResult(toolResult, { expanded: false, isPartial: true }, theme, { ...renderContext, isPartial: true }).render(80), []);
+for (const width of [80, 64, 30, 12, 6]) {
+  const lines = definition.renderResult(toolResult, { expanded: true, isPartial: false }, theme, renderContext).render(width);
+  assert.ok(lines.length > 0);
+  for (const line of lines) assert.ok(visibleWidth(line) <= width, `rendered line exceeds ${width} columns`);
+}
+const rendered = definition.renderResult(toolResult, { expanded: false, isPartial: false }, theme, renderContext).render(80);
+const prose = rendered.map(stripAnsi);
+assert.equal(prose[0], ' Workday · Fits before wrap-up');
+assert.equal(prose[1], '');
+assert.match(prose[2], /^ Estimated work: 15–30 minutes\. You have \d+ (minutes?|hours?)/);
+assert.doesNotMatch(prose.join('\n'), /[╭╮╰╯│─✓✗]/);
+assert.doesNotMatch(prose.join('\n'), /Europe\/|research/);
+// Heading is bold and colored; estimate is bold; widths respect outputPad.
+assert.match(rendered[0], /\x1b\[1m/);
+assert.ok(rendered[0].includes('\x1b[') && rendered[0] !== prose[0]);
+assert.match(rendered[2], /\x1b\[1m15–30 minutes\x1b\[22m/);
+assert.ok(rendered.every((line) => visibleWidth(line) <= 80));
+// Bold must survive wrapping across lines in the real pi-tui wrapper.
+const narrow = definition.renderResult(toolResult, { expanded: false, isPartial: false }, theme, { ...renderContext, outputPad: 0 }).render(24);
+const estimateLine = narrow.find((line) => stripAnsi(line).includes('15–30'));
+assert.ok(estimateLine && estimateLine.slice(0, estimateLine.indexOf('15–30')).includes('\x1b[1m'), 'bold styling survives wrapping');
+assert.ok(narrow.every((line) => visibleWidth(line) <= 24));
 
 const uiContext = { ...context, hasUI: true, mode: 'tui' };
 await extension.commands.get('workday').handler('', uiContext);

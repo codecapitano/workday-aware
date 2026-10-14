@@ -1,3 +1,4 @@
+import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from '@earendil-works/pi-tui';
 import { Type } from 'typebox';
 
 import {
@@ -7,12 +8,19 @@ import {
   formatFooterStatus,
   resolveStatus,
 } from './runtime.mjs';
+import { createWorkdayAssessPresentation } from './presentation.mjs';
 
 const STATUS_KEY = 'workday-aware';
 const REFRESH_INTERVAL_MS = 60_000;
 const KINDS = ['implementation', 'research', 'verification', 'cleanup', 'handoff'];
 
+function loadPresentation() {
+  if (![visibleWidth, truncateToWidth, wrapTextWithAnsi].every((fn) => typeof fn === 'function')) return undefined;
+  return createWorkdayAssessPresentation({ visibleWidth, truncateToWidth, wrapTextWithAnsi });
+}
+
 export default function workdayAwareExtension(pi) {
+  const presentation = loadPresentation();
   let interval;
   let tracker;
 
@@ -46,6 +54,7 @@ export default function workdayAwareExtension(pi) {
     label: 'Workday assessment',
     description: 'Assess a pessimistic task-duration estimate against the configured wrap-up and end-of-day boundaries.',
     promptSnippet: 'Assess meaningful work against the configured workday',
+    ...presentation,
     parameters: Type.Object({
       minimumMinutes: Type.Integer({ minimum: 0, description: 'Pessimistic minimum duration in minutes' }),
       maximumMinutes: Type.Optional(Type.Integer({ minimum: 0, description: 'Pessimistic maximum duration in minutes; defaults to the minimum' })),

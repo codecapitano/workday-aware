@@ -82,11 +82,23 @@ test('renders an optional task label on completed and pending assessments', () =
   const status = { ...schedule, state: 'after_eod', phase: 'after_eod', remainingToWrapUp: 0, remainingToEndOfDay: 0 };
   const result = { content: [{ type: 'text', text: 'result' }], details: { status, assessment: { state: 'after_eod' }, task: 'Investigate Workday UX' } };
   const lines = render(presentation.renderResult(result, {}, theme, { args: { minimumMinutes: 15, maximumMinutes: 25, task: 'fallback task' } }));
-  assert.deepEqual(lines.map(strip), ['Investigate Workday UX', '', '15–25 minutes · After hours']);
+  assert.deepEqual(lines.map(strip), ['Investigate Workday UX', '', '15–25 minutes · After hours · End of day at 17:30']);
   assert.match(lines[0], /^\x1b\[31m\x1b\[1m/);
   assert.match(lines[2], /\x1b\[1m15–25 minutes\x1b\[22m/);
   const pending = render(presentation.renderCall({ minimumMinutes: 15, maximumMinutes: 25, task: 'Investigate Workday UX' }, theme, { args: { task: 'Investigate Workday UX' }, isPartial: true }));
   assert.deepEqual(pending.map(strip), ['Investigate Workday UX', '', '15–25 minutes · Assessing…']);
+});
+
+test('named task assessments show the effective project wrap-up clock', () => {
+  const status = { ...schedule, source: 'project', timezone: 'America/New_York', wrapUp: '15:45', endOfDay: '16:30', remainingToWrapUp: 60, remainingToEndOfDay: 105 };
+  const component = completed(status, { minMinutes: 25, maxMinutes: 50 }, { context: { args: { minimumMinutes: 25, maximumMinutes: 50, task: 'Discoverable terminal directory option' } } });
+  const lines = plainOf(component);
+  assert.deepEqual(lines, ['Discoverable terminal directory option', '', '25–50 minutes · Fits before wrap-up at 15:45']);
+  for (const width of [80, 40, 24, 12]) {
+    const wrapped = render(component, width);
+    assert.ok(wrapped.every((line) => visibleWidth(line) <= width));
+    assert.match(flat(wrapped.map(strip)), /Fits before wrap-up at 15:45/);
+  }
 });
 
 test('uses the task name from call arguments when result metadata has no label', () => {
@@ -101,11 +113,11 @@ test('uses the task name from call arguments when result metadata has no label',
   assert.doesNotMatch(lines.join(' '), /Your decision needed/);
 });
 
-test('named task assessments show the verdict without repeating timing or the decision question', () => {
+test('named task assessments show the relevant boundary without countdowns or the decision question', () => {
   for (const [minimum, maximum, state, verdict] of [
-    [20, 40, 'may_fit', 'May cross wrap-up'],
-    [40, 50, 'uses_wrap_up', 'Uses wrap-up'],
-    [40, 90, 'exceeds_eod', 'Exceeds end of day'],
+    [20, 40, 'may_fit', 'May cross wrap-up at 17:00'],
+    [40, 50, 'uses_wrap_up', 'Uses wrap-up from 17:00'],
+    [40, 90, 'exceeds_eod', 'Exceeds end of day at 17:30'],
   ]) {
     const result = assessStatus(schedule, { minMinutes: minimum, maxMinutes: maximum, kind: 'research' });
     assert.equal(result.assessment.state, state);
@@ -117,6 +129,21 @@ test('named task assessments show the verdict without repeating timing or the de
     assert.equal(lines.length, 3);
     assert.doesNotMatch(lines.map(strip).join(' '), /Your decision needed|You have|until wrap-up|until end of day/);
   }
+});
+
+test('named task verdicts omit boundary times when unavailable or not applicable', () => {
+  const labels = {
+    fits_before_wrap_up: 'Fits before wrap-up', may_fit: 'May cross wrap-up', uses_wrap_up: 'Uses wrap-up',
+    exceeds_eod: 'Exceeds end of day', after_eod: 'After hours', no_boundary: 'No workday boundary',
+  };
+  for (const [state, label] of Object.entries(labels)) {
+    for (const status of [{}, { wrapUp: null, endOfDay: '' }]) {
+      const result = { details: { status, assessment: { state }, task: 'Check timing' } };
+      assert.deepEqual(plainOf(presentation.renderResult(result, {}, theme, { args: { minimumMinutes: 5 } })), ['Check timing', '', `5 minutes · ${label}`]);
+    }
+  }
+  const result = { details: { status: schedule, assessment: { state: 'no_boundary' }, task: 'Check timing' } };
+  assert.deepEqual(plainOf(presentation.renderResult(result, {}, theme, { args: { minimumMinutes: 5 } })), ['Check timing', '', '5 minutes · No workday boundary']);
 });
 
 test('cleans task labels and preserves fallback headings for absent, error, and unavailable tasks', () => {

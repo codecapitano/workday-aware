@@ -139,7 +139,16 @@ export function createWorkdayAssessPresentation({ visibleWidth, truncateToWidth,
     const task = taskOf(resolved.task ?? args?.task);
     const sentences = [];
     if (task) {
-      const verdict = resolved.verdict === 'after_eod' ? 'After hours' : VERDICTS[resolved.verdict].label;
+      let verdict = resolved.verdict === 'after_eod' ? 'After hours' : VERDICTS[resolved.verdict].label;
+      const boundary = {
+        fits_before_wrap_up: ['wrapUp', ' at '],
+        may_fit: ['wrapUp', ' at '],
+        uses_wrap_up: ['wrapUp', ' from '],
+        exceeds_eod: ['endOfDay', ' at '],
+        after_eod: ['endOfDay', ' · End of day at '],
+      }[resolved.verdict];
+      const clock = boundary && resolved.status?.[boundary[0]];
+      if (isClock(clock)) verdict += `${boundary[1]}${clean(clock)}`;
       sentences.push(estimate ? `${bold(clean(estimate))} · ${verdict}` : verdict);
     } else {
       if (estimate) sentences.push(`Estimated work: ${bold(clean(estimate))}.`);

@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { validateConfiguration } from './core.mjs';
 
 const schema = 1;
-const version = '1.2.0';
+const version = '1.2.1';
 const stateName = 'state.json';
 
 export function dataDir(home = homedir(), env = process.env, platformName = process.platform) {

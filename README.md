@@ -13,24 +13,24 @@ You can then choose a smaller slice, defer the task, or explicitly continue, whi
 
 Requirements: Node.js 20 or later and a supported coding agent. Native Pi integration requires Node.js 22.19 or later, matching Pi 0.87.1.
 
-Install the `v1.2.0` release with the pinned Vercel Skills CLI. These default commands opt out of the Vercel audit and telemetry. npm provides the installer; GitHub provides the skill. For Pi, use the native Pi package command below. The native package loads both the skill and the Pi extension; the Vercel Skills CLI installs the skill only for Pi.
+Install the `v1.2.1` release with the pinned Vercel Skills CLI. These default commands opt out of the Vercel audit and telemetry. npm provides the installer; GitHub provides the skill. For Pi, use the native Pi package command below. The native package loads both the skill and the Pi extension; the Vercel Skills CLI installs the skill only for Pi.
 
 macOS/Linux:
 
 ```sh
-DO_NOT_TRACK=1 npx skills@1.5.25 add https://github.com/codecapitano/workday-aware/tree/v1.2.0 --global
+DO_NOT_TRACK=1 npx skills@1.5.25 add https://github.com/codecapitano/workday-aware/tree/v1.2.1 --global
 ```
 
 Windows PowerShell:
 
 ```powershell
-$env:DO_NOT_TRACK = "1"; npx skills@1.5.25 add https://github.com/codecapitano/workday-aware/tree/v1.2.0 --global
+$env:DO_NOT_TRACK = "1"; npx skills@1.5.25 add https://github.com/codecapitano/workday-aware/tree/v1.2.1 --global
 ```
 
 For Pi, install the native package with:
 
 ```sh
-pi install git:github.com/codecapitano/workday-aware@v1.2.0
+pi install git:github.com/codecapitano/workday-aware@v1.2.1
 ```
 
 After installing or updating a Pi package, restart Pi or run `/reload` so Pi loads the skill and extension.
